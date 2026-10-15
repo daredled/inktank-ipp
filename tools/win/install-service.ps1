@@ -58,7 +58,8 @@ $app = Join-Path $InstallDir "app"
 if (Test-Path $app) { Remove-Item -Recurse -Force $app }
 New-Item -ItemType Directory -Path $app | Out-Null
 Copy-Item (Join-Path $RepoDir "pyproject.toml"), (Join-Path $RepoDir "uv.lock"),
-          (Join-Path $RepoDir ".python-version"), (Join-Path $RepoDir "README.md") $app
+          (Join-Path $RepoDir ".python-version"), (Join-Path $RepoDir "README.md"),
+          (Join-Path $RepoDir "LICENSE"), (Join-Path $RepoDir "THIRD_PARTY_NOTICES.md") $app
 Copy-Item -Recurse (Join-Path $RepoDir "inktank") $app
 Get-ChildItem -Recurse -Directory -Filter __pycache__ $app | Remove-Item -Recurse -Force
 

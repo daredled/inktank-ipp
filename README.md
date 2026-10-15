@@ -21,8 +21,9 @@ target.
   `ESC*b#W`; blank rows are skipped with `ESC*b#Y`.
 - Sources: HPLIP (`prnt/hpcups/Pcl3Gui2.cpp`, `Mode10.cpp`, family
   `P15_CISS` in `hpcups.drv`) and the real output of the Windows v4 driver
-  (`captures/hp-ref-color.prn`), which matches HPLIP except for header
-  details (11000 leading zero bytes, paper subtype 1004, raster width 5030).
+  (see `tools/win/hp-print-to-file.ps1`), which matches HPLIP except for
+  header details (11000 leading zero bytes, paper subtype 1004, raster width
+  5030). Captures are kept locally in `captures/`, which is git-ignored.
 - The raster origin is the printable area (70 px margins at 600 dpi).
 - The Windows queue uses a v4 driver: even RAW jobs go through HP's XPS
   filter and fail (0x8051100F). That is why we write straight to the device
@@ -91,7 +92,7 @@ Get-Content 'C:\Program Files\inktank\logs\inktank-service.out.log' -Tail 20 -Wa
 ```bash
 uv run inktank testpage out/testpage.prn          # test page
 uv run inktank image photo.png out/photo.prn      # image -> PCL3GUI
-uv run inktank inspect captures/x.prn --png out/x # list commands and render pages
+uv run inktank inspect job.prn --png out/job      # list commands and render pages
 uv run inktank usbpcap capture.pcapng --out out/c # extract bulk data from USBPcap
 uv run inktank print job.prn|photo.png            # (Windows) straight over USB
 uv run inktank device-id                          # (Windows) IEEE 1284 Device ID
@@ -110,6 +111,12 @@ uv run pytest
 # Against HPLIP's original encoder (Mode10.cpp built with -DAPDK_LITTLE_ENDIAN):
 uv run python tests/check_against_hplip.py /path/to/harness
 ```
+
+## License
+
+MIT, see [LICENSE](LICENSE). `inktank/mode10.py` and `inktank/pcl3gui.py`
+are adapted from HPLIP's hpcups (BSD 3-Clause, HP); see
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 ## To do
 

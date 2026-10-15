@@ -3,6 +3,8 @@ name = "inktank"
 version = "0.1.0"
 description = "Experimental HP Ink Tank 315 driver (PCL3GUI) with a network print service"
 readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE", "THIRD_PARTY_NOTICES.md"]
 requires-python = ">=3.14"
 dependencies = [
     "aiohttp>=3.14.5",
