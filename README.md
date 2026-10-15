@@ -63,6 +63,29 @@ A status page with recent jobs is at `http://<server-ip>:8631/`.
 Supported formats: `image/pwg-raster` (Windows, Android/Mopria), `image/urf`
 (AirPrint), `image/jpeg`, `image/png`. Paper: Letter and A4.
 
+## Windows service
+
+`tools/win/install-service.ps1` (elevated) deploys the code to
+`C:\Program Files\inktank` with its own Python and virtual environment and
+registers the `inktank` service through [WinSW](https://github.com/winsw/winsw)
+v2.12.0 (pinned by SHA-256). The service runs as LocalSystem, starts
+automatically and restarts on failure.
+
+```powershell
+powershell -ExecutionPolicy Bypass -File tools\win\install-service.ps1             # install or update
+powershell -ExecutionPolicy Bypass -File tools\win\install-service.ps1 -Uninstall  # remove
+```
+
+Logs live in `C:\Program Files\inktank\logs` and roll at 10 MB (5 files kept):
+
+- `inktank-service.out.log`: server log (startup, requests, jobs, errors)
+- `inktank-service.err.log`: only uncaught crashes
+- `inktank-service.wrapper.log`: WinSW events (start, stop, restarts)
+
+```powershell
+Get-Content 'C:\Program Files\inktank\logs\inktank-service.out.log' -Tail 20 -Wait
+```
+
 ## Command-line tools
 
 ```bash
@@ -92,5 +115,5 @@ uv run python tests/check_against_hplip.py /path/to/harness
 
 - Printer status (ink, paper, errors): the driver uses
   `hpgid25v4-bidiUSB.js`; USB interface MI_03 "(REST)" looks like LEDM.
-- Run as a Windows service (PyInstaller + WinSW) and on a Raspberry Pi.
+- Run on a Raspberry Pi (systemd).
 - PDF input.

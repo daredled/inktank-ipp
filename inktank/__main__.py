@@ -130,8 +130,10 @@ def cmd_serve(args):
     import asyncio
     import logging
     from . import server
+    # Log to stdout: under WinSW that is inktank-service.out.log, while stderr
+    # (err.log) only gets real crashes such as uncaught tracebacks.
     logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO,
-                        format="%(asctime)s %(levelname)s %(message)s")
+                        format="%(asctime)s %(levelname)s %(message)s", stream=sys.stdout)
     sink = server.FileSink(args.to_dir) if args.to_dir else server.UsbSink()
     try:
         asyncio.run(server.serve(args.port, sink, mdns=not args.no_mdns, ip=args.ip, name=args.name))
