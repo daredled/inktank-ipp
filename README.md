@@ -28,12 +28,30 @@ target.
 - The raster origin is the printable area (70 px margins at 600 dpi).
 - The Windows queue uses a v4 driver: even RAW jobs go through HP's XPS
   filter and fail (0x8051100F). That is why we write straight to the device
-  through `usbprint.sys` (`inktank/usb_windows.py`, `tools/win/usbprint.ps1`).
+  through `usbprint.sys` (`inktank/transport/usbprint.py`, `tools/win/usbprint.ps1`).
 - The USB device has four interfaces: MI_00 HP's scanner driver (WIA),
   MI_01 the printer (class 7), MI_02 and MI_03 vendor class ff/04/01 "REST".
   MI_02 is bound to WinUSB and carries plain HTTP/1.1 to the printer's
   built-in web server, which speaks **eSCL** natively (`/eSCL/*`: platen
   only, 75-600 dpi, JPEG/PDF) and LEDM (`/DevMgmt/*`).
+
+## Code layout
+
+| Module | Role |
+|---|---|
+| `pcl3gui.py`, `mode10.py`, `raster.py` | Driver: PCL3GUI encoder, Mode 10 compression, PWG/URF decoding |
+| `printing.py` | Document -> PCL3GUI job, and sinks (USB or `.prn` files) |
+| `scanning.py` | One-page scan straight over USB (`inktank scan`) |
+| `transport/usbprint.py` | Printing through `usbprint.sys` (Windows only) |
+| `transport/usb_http.py` | HTTP over USB interface 2 via libusb (eSCL, LEDM) |
+| `ipp.py`, `ipp_server.py` | IPP encoding and the IPP Everywhere printer (jobs, attributes) |
+| `escl_server.py` | eSCL proxy for network scanning |
+| `mdns.py` | DNS-SD advertisement |
+| `server.py` | `inktank serve`: puts the above on one port |
+| `pclparse.py`, `usbpcap.py` | Analysis tools (inspect `.prn` files, USB captures) |
+
+Only `transport/usbprint.py` is tied to Windows; a Linux port (Raspberry Pi)
+needs another print transport (e.g. `/dev/usb/lp0`) and nothing else.
 
 ## Setup
 
@@ -73,7 +91,7 @@ Supported formats: `image/pwg-raster` (Windows, Android/Mopria), `image/urf`
 ## Network scanning (eSCL)
 
 `inktank serve` also shares the scanner: it forwards every `/eSCL/*` request
-to the printer over USB (`inktank/escl.py`) and advertises `_uscan._tcp` over
+to the printer over USB (`inktank/escl_server.py`) and advertises `_uscan._tcp` over
 mDNS on the same port. Windows 11, macOS, iOS, Android and Linux
 (sane-airscan) find it as **HP Ink Tank 315 (inktank)** with no driver; by
 hand, the eSCL root is `http://<server-ip>:8631/eSCL`. Use `--no-scanner` to

@@ -9,7 +9,7 @@ import sys
 from ctypes import wintypes
 
 if sys.platform != "win32":
-    raise ImportError("usb_windows only works on Windows")
+    raise ImportError("usbprint only works on Windows")
 
 HP_INK_TANK_310 = "vid_03f0&pid_1053"
 

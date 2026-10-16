@@ -3,7 +3,8 @@ import asyncio
 from aiohttp import web
 from aiohttp.test_utils import TestClient, TestServer
 
-from inktank import escl
+from inktank import escl_server
+from inktank.transport import usb_http
 
 
 def _recv_from(*packets):
@@ -12,7 +13,7 @@ def _recv_from(*packets):
 
 
 def test_read_response_content_length_split_across_packets():
-    status, headers, body = escl.read_response(_recv_from(
+    status, headers, body = usb_http.read_response(_recv_from(
         b"HTTP/1.1 201 Created\r\nLocation: http://local",
         b"host/eSCL/ScanJobs/42\r\nContent-Length: 5\r\n\r\nab",
         b"cde"))
@@ -22,7 +23,7 @@ def test_read_response_content_length_split_across_packets():
 
 
 def test_read_response_chunked():
-    status, _, body = escl.read_response(_recv_from(
+    status, _, body = usb_http.read_response(_recv_from(
         b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n4\r\nab",
         b"cd\r\nA;ext=1\r\n0123456789\r\n0\r\n\r\n"))
     assert status == 200
@@ -30,7 +31,7 @@ def test_read_response_chunked():
 
 
 def test_read_response_without_body():
-    status, _, body = escl.read_response(_recv_from(b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\r\n"))
+    status, _, body = usb_http.read_response(_recv_from(b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\r\n"))
     assert (status, body) == (404, b"")
 
 
@@ -61,7 +62,7 @@ def test_proxy():
     async def run():
         fake = FakeScanner()
         app = web.Application()
-        escl.add_routes(app, fake, "HP Ink Tank 315 (inktank)", "1234")
+        escl_server.add_routes(app, fake, "HP Ink Tank 315 (inktank)", "1234")
         async with TestClient(TestServer(app)) as client:
             r = await client.get("/eSCL/ScannerCapabilities")
             assert r.status == 200

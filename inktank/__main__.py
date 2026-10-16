@@ -17,7 +17,7 @@ import sys
 
 from PIL import Image, ImageDraw
 
-from . import escl, pclparse, pcl3gui, usbpcap
+from . import pclparse, pcl3gui, scanning, usbpcap
 
 
 def make_test_page(opt: pcl3gui.JobOptions) -> Image.Image:
@@ -106,8 +106,8 @@ def cmd_usbpcap(args):
 
 
 def _usb():
-    from . import usb_windows
-    return usb_windows.UsbPrinter()
+    from .transport import usbprint
+    return usbprint.UsbPrinter()
 
 
 def cmd_print(args):
@@ -129,9 +129,10 @@ def cmd_device_id(args):
 
 def cmd_scan(args):
     fmt = "application/pdf" if args.output.lower().endswith(".pdf") else "image/jpeg"
-    channel = escl.UsbHttp()
+    from .transport.usb_http import UsbHttp
+    channel = UsbHttp()
     try:
-        doc = escl.scan(channel, escl.scan_settings(args.dpi, args.mode, fmt, args.paper))
+        doc = scanning.scan(channel, scanning.scan_settings(args.dpi, args.mode, fmt, args.paper))
     finally:
         channel.close()
     open(args.output, "wb").write(doc)
@@ -141,15 +142,16 @@ def cmd_scan(args):
 def cmd_serve(args):
     import asyncio
     import logging
-    from . import server
+    from . import printing, server
+    from .transport.usb_http import UsbHttp
     # Log to stdout: under WinSW that is inktank-service.out.log, while stderr
     # (err.log) only gets real crashes such as uncaught tracebacks.
     logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO,
                         format="%(asctime)s %(levelname)s %(message)s", stream=sys.stdout)
-    sink = server.FileSink(args.to_dir) if args.to_dir else server.UsbSink()
-    scanner = None if args.no_scanner else escl.UsbHttp()
+    sink = printing.FileSink(args.to_dir) if args.to_dir else printing.UsbSink()
+    scanner = None if args.no_scanner else UsbHttp()
     try:
-        asyncio.run(server.serve(args.port, sink, mdns=not args.no_mdns, ip=args.ip, name=args.name,
+        asyncio.run(server.serve(args.port, sink, mdns_enabled=not args.no_mdns, ip=args.ip, name=args.name,
                                  scanner=scanner))
     except KeyboardInterrupt:
         pass
@@ -191,8 +193,8 @@ def main():
     p = sub.add_parser("scan", help="scan a page from the platen straight over USB (JPEG or PDF)")
     p.add_argument("output", help="output file; .pdf scans to PDF, anything else to JPEG")
     p.add_argument("--dpi", type=int, default=300, choices=[75, 100, 200, 300, 600])
-    p.add_argument("--mode", default="color", choices=list(escl.COLOR_MODES))
-    p.add_argument("--paper", default="letter", choices=list(escl.REGIONS))
+    p.add_argument("--mode", default="color", choices=list(scanning.COLOR_MODES))
+    p.add_argument("--paper", default="letter", choices=list(scanning.REGIONS))
     p.set_defaults(func=cmd_scan)
 
     p = sub.add_parser("serve", help="IPP Everywhere + eSCL server for the local network")
