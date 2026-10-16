@@ -6,7 +6,8 @@
     inktank usbpcap capture.pcapng [--out prefix]
     inktank print job.prn | photo.png     (Windows, straight over USB)
     inktank device-id                     (Windows)
-    inktank serve                         (IPP Everywhere server)
+    inktank scan out.jpg|out.pdf          (straight over USB, eSCL)
+    inktank serve                         (IPP Everywhere + eSCL server)
 """
 
 import argparse
@@ -16,7 +17,7 @@ import sys
 
 from PIL import Image, ImageDraw
 
-from . import pclparse, pcl3gui, usbpcap
+from . import escl, pclparse, pcl3gui, usbpcap
 
 
 def make_test_page(opt: pcl3gui.JobOptions) -> Image.Image:
@@ -126,6 +127,17 @@ def cmd_device_id(args):
         print(printer.device_id())
 
 
+def cmd_scan(args):
+    fmt = "application/pdf" if args.output.lower().endswith(".pdf") else "image/jpeg"
+    channel = escl.UsbHttp()
+    try:
+        doc = escl.scan(channel, escl.scan_settings(args.dpi, args.mode, fmt, args.paper))
+    finally:
+        channel.close()
+    open(args.output, "wb").write(doc)
+    print(f"{args.output}: {len(doc)} bytes")
+
+
 def cmd_serve(args):
     import asyncio
     import logging
@@ -135,8 +147,10 @@ def cmd_serve(args):
     logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO,
                         format="%(asctime)s %(levelname)s %(message)s", stream=sys.stdout)
     sink = server.FileSink(args.to_dir) if args.to_dir else server.UsbSink()
+    scanner = None if args.no_scanner else escl.UsbHttp()
     try:
-        asyncio.run(server.serve(args.port, sink, mdns=not args.no_mdns, ip=args.ip, name=args.name))
+        asyncio.run(server.serve(args.port, sink, mdns=not args.no_mdns, ip=args.ip, name=args.name,
+                                 scanner=scanner))
     except KeyboardInterrupt:
         pass
 
@@ -174,12 +188,20 @@ def main():
     p = sub.add_parser("device-id", help="show the printer's IEEE 1284 Device ID (Windows)")
     p.set_defaults(func=cmd_device_id)
 
-    p = sub.add_parser("serve", help="IPP Everywhere server for the local network")
+    p = sub.add_parser("scan", help="scan a page from the platen straight over USB (JPEG or PDF)")
+    p.add_argument("output", help="output file; .pdf scans to PDF, anything else to JPEG")
+    p.add_argument("--dpi", type=int, default=300, choices=[75, 100, 200, 300, 600])
+    p.add_argument("--mode", default="color", choices=list(escl.COLOR_MODES))
+    p.add_argument("--paper", default="letter", choices=list(escl.REGIONS))
+    p.set_defaults(func=cmd_scan)
+
+    p = sub.add_parser("serve", help="IPP Everywhere + eSCL server for the local network")
     p.add_argument("--port", type=int, default=8631)
     p.add_argument("--ip", help="IP to advertise over mDNS (default: the default-route interface)")
     p.add_argument("--name", default="HP Ink Tank 315 (inktank)")
     p.add_argument("--no-mdns", action="store_true", help="do not advertise over mDNS")
     p.add_argument("--to-dir", help="save jobs as .prn files instead of printing")
+    p.add_argument("--no-scanner", action="store_true", help="do not share the scanner (eSCL)")
     p.add_argument("-v", "--verbose", action="store_true")
     p.set_defaults(func=cmd_serve)
 

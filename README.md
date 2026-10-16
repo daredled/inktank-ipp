@@ -1,17 +1,18 @@
 # inktank-ipp
 
 Experimental Python driver for the HP Ink Tank 315 ("Ink Tank 310 series"
-family, USB 03F0:1053), plus an IPP Everywhere server so any device on the
-local network can print to it without installing a driver.
+family, USB 03F0:1053), plus an IPP Everywhere and eSCL server so any device
+on the local network can print and scan without installing a driver.
 
 It runs on Windows 11 today (developed from WSL); a Raspberry Pi is a future
 target.
 
 ```
-[PC / phone] --IPP (network)--> [inktank serve] --USB--> Ink Tank 315
-                                 ├─ IPP server + mDNS advertisement
-                                 ├─ PWG Raster / URF / JPEG / PNG -> PCL3GUI
-                                 └─ direct USB write (usbprint.sys)
+[PC / phone] --IPP/eSCL (network)--> [inktank serve] --USB--> Ink Tank 315
+                                      ├─ IPP + eSCL server, mDNS advertisement
+                                      ├─ PWG Raster / URF / JPEG / PNG -> PCL3GUI
+                                      ├─ print: direct USB write (usbprint.sys, MI_01)
+                                      └─ scan: HTTP over USB (libusb/WinUSB, MI_02)
 ```
 
 ## What we know about the protocol
@@ -28,6 +29,11 @@ target.
 - The Windows queue uses a v4 driver: even RAW jobs go through HP's XPS
   filter and fail (0x8051100F). That is why we write straight to the device
   through `usbprint.sys` (`inktank/usb_windows.py`, `tools/win/usbprint.ps1`).
+- The USB device has four interfaces: MI_00 HP's scanner driver (WIA),
+  MI_01 the printer (class 7), MI_02 and MI_03 vendor class ff/04/01 "REST".
+  MI_02 is bound to WinUSB and carries plain HTTP/1.1 to the printer's
+  built-in web server, which speaks **eSCL** natively (`/eSCL/*`: platen
+  only, 75-600 dpi, JPEG/PDF) and LEDM (`/DevMgmt/*`).
 
 ## Setup
 
@@ -64,6 +70,18 @@ A status page with recent jobs is at `http://<server-ip>:8631/`.
 Supported formats: `image/pwg-raster` (Windows, Android/Mopria), `image/urf`
 (AirPrint), `image/jpeg`, `image/png`. Paper: Letter and A4.
 
+## Network scanning (eSCL)
+
+`inktank serve` also shares the scanner: it forwards every `/eSCL/*` request
+to the printer over USB (`inktank/escl.py`) and advertises `_uscan._tcp` over
+mDNS on the same port. Windows 11, macOS, iOS, Android and Linux
+(sane-airscan) find it as **HP Ink Tank 315 (inktank)** with no driver; by
+hand, the eSCL root is `http://<server-ip>:8631/eSCL`. Use `--no-scanner` to
+turn it off.
+
+Only one page at a time from the glass (no feeder or duplex), Letter or A4,
+up to 600 dpi, JPEG or PDF.
+
 ## Windows service
 
 `tools/win/install-service.ps1` (elevated) deploys the code to
@@ -96,6 +114,7 @@ uv run inktank inspect job.prn --png out/job      # list commands and render pag
 uv run inktank usbpcap capture.pcapng --out out/c # extract bulk data from USBPcap
 uv run inktank print job.prn|photo.png            # (Windows) straight over USB
 uv run inktank device-id                          # (Windows) IEEE 1284 Device ID
+uv run inktank scan page.pdf --dpi 300 --mode gray # (Windows/Linux) scan straight over USB
 ```
 
 Reference output from the official driver (prints to a file, not to paper):
@@ -116,11 +135,12 @@ uv run python tests/check_against_hplip.py /path/to/harness
 
 MIT, see [LICENSE](LICENSE). `inktank/mode10.py` and `inktank/pcl3gui.py`
 are adapted from HPLIP's hpcups (BSD 3-Clause, HP); see
-[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md), which also covers the
+libusb DLL that the `libusb-package` dependency installs.
 
 ## To do
 
-- Printer status (ink, paper, errors): the driver uses
-  `hpgid25v4-bidiUSB.js`; USB interface MI_03 "(REST)" looks like LEDM.
+- Printer status (ink, paper, errors): LEDM answers over the same USB HTTP
+  channel (`/DevMgmt/ProductStatusDyn.xml`, `ConsumableConfigDyn.xml`).
 - Run on a Raspberry Pi (systemd).
 - PDF input.

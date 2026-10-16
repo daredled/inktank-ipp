@@ -99,7 +99,7 @@ $exe = Join-Path $InstallDir "venv\Scripts\inktank.exe"
 <service>
   <id>$ServiceId</id>
   <name>inktank IPP print server</name>
-  <description>Shares the HP Ink Tank 315 on the network over IPP Everywhere (inktank).</description>
+  <description>Shares the HP Ink Tank 315 on the network over IPP Everywhere and eSCL (inktank).</description>
   <executable>$exe</executable>
   <arguments>serve --port $Port</arguments>
   <workingdirectory>$InstallDir</workingdirectory>

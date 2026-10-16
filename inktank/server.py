@@ -1,7 +1,8 @@
 """Minimal IPP Everywhere server for the HP Ink Tank 315.
 
 Accepts PWG Raster (Windows, Android/Mopria), URF (AirPrint), JPEG and PNG;
-converts each page to PCL3GUI and sends it to the printer over USB.
+converts each page to PCL3GUI and sends it to the printer over USB. It also
+shares the scanner over eSCL (see escl.py).
 """
 
 import asyncio
@@ -17,7 +18,7 @@ import numpy as np
 from aiohttp import web
 from PIL import Image
 
-from . import ipp, pcl3gui, raster
+from . import escl, ipp, pcl3gui, raster
 
 log = logging.getLogger("inktank")
 
@@ -411,7 +412,7 @@ def lan_ip() -> str:
         return s.getsockname()[0]
 
 
-async def advertise(printer: Printer, ip: str, port: int):
+async def advertise(printer: Printer, ip: str, port: int, scanner: bool = False):
     from zeroconf import IPVersion
     from zeroconf.asyncio import AsyncServiceInfo, AsyncZeroconf
 
@@ -434,6 +435,11 @@ async def advertise(printer: Printer, ip: str, port: int):
         AsyncServiceInfo("_universal._sub._ipp._tcp.local.", name, port=port, properties=txt,
                          server=server, parsed_addresses=[ip]),
     ]
+    if scanner:
+        infos.append(AsyncServiceInfo(
+            "_uscan._tcp.local.", f"{printer.name}._uscan._tcp.local.", port=port,
+            properties=escl.mdns_txt(MAKE_MODEL, str(printer.uuid), ip, port, socket.gethostname()),
+            server=server, parsed_addresses=[ip]))
     zcs = []
     # zeroconf indexes services by name, so each registration sharing the
     # name gets its own instance, in cooperating mode.
@@ -441,19 +447,23 @@ async def advertise(printer: Printer, ip: str, port: int):
         zc = AsyncZeroconf(interfaces=[ip], ip_version=IPVersion.V4Only)
         await zc.async_register_service(info, cooperating_responders=True)
         zcs.append(zc)
-    log.info("advertised over mDNS as '%s' at %s:%d", printer.name, ip, port)
+    log.info("advertised over mDNS as '%s' at %s:%d%s", printer.name, ip, port,
+             " (printer and scanner)" if scanner else "")
     return zcs
 
 
 # --- Startup -----------------------------------------------------------------
 
-async def serve(port: int, sink, mdns: bool = True, ip: str | None = None, name: str = MAKE_MODEL):
+async def serve(port: int, sink, mdns: bool = True, ip: str | None = None, name: str = MAKE_MODEL,
+                scanner: escl.UsbHttp | None = None):
     printer = Printer(sink, name)
     app = web.Application(client_max_size=512 * 1024 * 1024)
     app[PRINTER] = printer
     app.router.add_post("/ipp/print", handle_ipp)
     app.router.add_post("/", handle_ipp)
     app.router.add_get("/", handle_index)
+    if scanner:
+        escl.add_routes(app, scanner, MAKE_MODEL, str(printer.uuid))
     runner = web.AppRunner(app)
     await runner.setup()
     site = web.TCPSite(runner, "0.0.0.0", port)
@@ -462,7 +472,7 @@ async def serve(port: int, sink, mdns: bool = True, ip: str | None = None, name:
     worker = asyncio.create_task(printer.worker())
     zcs = []
     if mdns:
-        zcs = await advertise(printer, ip or lan_ip(), port)
+        zcs = await advertise(printer, ip or lan_ip(), port, scanner=scanner is not None)
     try:
         await asyncio.Event().wait()
     finally:
@@ -470,3 +480,5 @@ async def serve(port: int, sink, mdns: bool = True, ip: str | None = None, name:
         for zc in zcs:
             await zc.async_close()
         await runner.cleanup()
+        if scanner:
+            scanner.close()

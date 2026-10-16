@@ -35,6 +35,13 @@ ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
+## libusb, pyusb
+
+Scanning uses pyusb (BSD 3-Clause) and the `libusb-package` wheel, which ships
+a prebuilt libusb 1.0 shared library (LGPL-2.1-or-later,
+https://libusb.info). They are installed as dependencies, loaded dynamically
+and not included in this repository.
+
 ## WinSW
 
 `tools/win/install-service.ps1` downloads WinSW v2.12.0
